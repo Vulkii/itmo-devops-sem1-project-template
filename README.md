@@ -11,10 +11,12 @@ REST API сервис для загрузки и выгрузки данных �
 Как установить и запустить приложение локально?
 
 1. Установить postgresql
+```
 sudo apt update
 sudo apt install -y postgresql
-
-2. Создать и настроить базу данных
+```
+3. Создать и настроить базу данных
+```
 psql -U postgres
 CREATE USER validator WITH PASSWORD    'val1dat0r';
 CREATE DATABASE "project-sem-1";
@@ -27,26 +29,29 @@ CREATE TABLE IF NOT EXISTS prices (
     category TEXT NOT NULL,
     price NUMERIC(10, 2) NOT NULL
   );
-
-3. Установить зависимости
+```
+4. Установить зависимости
+```
 bash ./scripts/prepare.sh
-
-4. Запустить сервер
+```
+5. Запустить сервер
+```
 bash ./scripts/run.sh
-
-5. Запустить тесты
-bash ./scripts/tests.sh
-
+```
+6. Запустить тесты
+```bash ./scripts/tests.sh
+```
 ## Тестирование
 
 Директория `sample_data` - это пример директории, которая является разархивированной версией файла `sample_data.zip`
 
+
 Отправить POST-запрос на запись в БД
-curl -X POST -F "file=@sample_data.zip" http://localhost:8080/api/v0/prices
-
+```curl -X POST -F "file=@sample_data.zip" http://localhost:8080/api/v0/prices
+```
 Отправить GET-запрос на скачивание записей из БД
-curl -X GET -o response.zip http://localhost:8080/api/v0/prices
-
+```curl -X GET -o response.zip http://localhost:8080/api/v0/prices
+```
 ## Контакт
 
 Автор - Сухих Матвей
