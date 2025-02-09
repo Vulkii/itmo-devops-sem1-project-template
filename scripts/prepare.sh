@@ -4,7 +4,7 @@ set -e
 
 echo "Installing postgresql and unzip"
 sudo apt update
-sudo apt install -y postgresql postgresql-client unzip
+sudo apt install -y postgresql postgresql-client unzip golang
 
 echo "Starting PostgreSQL"
 sudo systemctl start postgresql
