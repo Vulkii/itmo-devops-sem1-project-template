@@ -110,7 +110,15 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 		"total_price":      totalPrice,
 	}
 	log.Printf("Result query: %+v\n", response)
-	json.NewEncoder(w).Encode(response)
+	w.Header().Set("Content-Type", "application/json")
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		log.Printf("JSON error: %v\n", err)
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	w.Write(responseBytes)
+
 }
 
 func processCSV(f *zip.File, totalItems *int, totalPrice *float64, categories map[string]bool) {
