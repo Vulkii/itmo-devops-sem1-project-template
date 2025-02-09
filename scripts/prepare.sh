@@ -10,8 +10,15 @@ echo "Starting PostgreSQL"
 sudo systemctl start postgresql
 sudo systemctl enable postgresql
 
-echo "Waiting PostgreSQL to start"
-sleep 10
+echo "Waiting for PostgreSQL to start"
+for i in {1..10}; do
+    if sudo -u postgres pg_isready -q; then
+        echo "PostgreSQL is ready"
+        break
+    fi
+    echo "PostgreSQL is not ready yet. sleep 2 sec. ($i/10)"
+    sleep 2
+done
 
 echo "Creating DB and user"
 sudo -u postgres psql <<EOF
