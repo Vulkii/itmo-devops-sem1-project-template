@@ -41,15 +41,29 @@ create_test_files() {
 check_api_simple() {
     echo -e "\nПроверка API (простой уровень)"
     
-    # Проверка POST /api/v0/prices
-    echo "Тестирование POST /api/v0/prices"
-    response=$(curl -s -F "file=@$TEST_ZIP" "${API_HOST}/api/v0/prices")
-    if [[ $response == *"total_items"* && $response == *"total_categories"* && $response == *"total_price"* ]]; then
-        echo -e "${GREEN}✓ POST запрос успешен${NC}"
-    else
-        echo -e "${RED}✗ POST запрос неуспешен${NC}"
+        echo "Тестирование POST /api/v0/prices"
+
+    response=$(curl -s -o response.json -w "%{http_code}" -F "file=@$TEST_ZIP" "${API_HOST}/api/v0/prices")
+    http_code=$(cat response.json | tail -n 1)
+
+    cat response.json | head -n -1 > response_body.json
+
+    echo "Ответ сервера: $(cat response_body.json)"
+
+    if [[ $http_code -ne 200 ]]; then
+        echo -e "${RED}✗ Ошибка: Сервер вернул HTTP-код $http_code${NC}"
         return 1
     fi
+
+    if [[ $(cat response_body.json) == *"total_items"* && \
+          $(cat response_body.json) == *"total_categories"* && \
+          $(cat response_body.json) == *"total_price"* ]]; then
+        echo -e "${GREEN}✓ POST запрос успешен${NC}"
+    else
+        echo -e "${RED}✗ POST запрос не содержит ожидаемые поля${NC}"
+        return 1
+    fi
+
     
     # Проверка GET /api/v0/prices
     echo "Тестирование GET /api/v0/prices"
