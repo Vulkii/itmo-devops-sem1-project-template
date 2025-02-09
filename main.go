@@ -117,7 +117,7 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
-	w.Write(responseBytes)
+	fmt.Fprint(w, string(responseBytes))
 
 }
 
