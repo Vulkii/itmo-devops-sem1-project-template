@@ -54,12 +54,16 @@ func handleRequests(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlePost(w http.ResponseWriter, r *http.Request) {
+	log.Println("Got POST-request.")
+
 	file, header, err := r.FormFile("file")
 	if err != nil {
+		log.Printf("Fail to load the file: %v\n", err)
 		http.Error(w, "Fail to load the file", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
+	log.Printf("File %s uploaded sucessfully.\n", header.Filename)
 
 	tempDir := "./temp"
 	os.MkdirAll(tempDir, os.ModePerm)
@@ -67,24 +71,35 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 	zipPath := filepath.Join(tempDir, header.Filename)
 	outFile, err := os.Create(zipPath)
 	if err != nil {
+		log.Printf("Fail to create outFile %s: %v\n", zipPath, err)
 		http.Error(w, "Fail to create outFile", http.StatusInternalServerError)
 		return
 	}
 	defer outFile.Close()
-	io.Copy(outFile, file)
+
+	_, err = io.Copy(outFile, file)
+	if err != nil {
+		log.Printf("Fail to save file: %v\n", err)
+		http.Error(w, "Fail to save file", http.StatusInternalServerError)
+		return
+	}
+	log.Printf("File saved in temp dir: %s\n", zipPath)
 
 	zipReader, err := zip.OpenReader(zipPath)
 	if err != nil {
+		log.Printf("Fail to read the archive: %v\n", err)
 		http.Error(w, "Fail to read the archive", http.StatusInternalServerError)
 		return
 	}
 	defer zipReader.Close()
 
-	var totalItems, totalPrice int
+	var totalItems int
+	var totalPrice float64
 	categories := make(map[string]bool)
 
 	for _, f := range zipReader.File {
 		if strings.HasSuffix(f.Name, ".csv") {
+			log.Printf("CSV detected: %s\n", f.Name)
 			processCSV(f, &totalItems, &totalPrice, categories)
 		}
 	}
@@ -94,35 +109,72 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 		"total_categories": len(categories),
 		"total_price":      totalPrice,
 	}
+	log.Printf("Result query: %+v\n", response)
 	json.NewEncoder(w).Encode(response)
 }
 
-func processCSV(f *zip.File, totalItems *int, totalPrice *int, categories map[string]bool) {
-	rc, _ := f.Open()
+func processCSV(f *zip.File, totalItems *int, totalPrice *float64, categories map[string]bool) {
+	log.Printf("Starting CSV: %s\n", f.Name)
+
+	rc, err := f.Open()
+	if err != nil {
+		log.Printf("Fail to open CSV %s: %v\n", f.Name, err)
+		return
+	}
 	defer rc.Close()
 
 	reader := csv.NewReader(rc)
-	reader.Read()
+
+	header, err := reader.Read()
+	if err != nil {
+		log.Printf("Fail to read CSV: %v\n", err)
+		return
+	}
+	log.Printf("Heading CSV: %v\n", header)
 
 	for {
 		record, err := reader.Read()
 		if err == io.EOF {
 			break
 		}
+		if err != nil {
+			log.Printf("Fail to read string in CSV: %v\n", err)
+			continue
+		}
 
-		productID, _ := strconv.Atoi(record[0])
-		createdAt := record[1]
-		name := record[2]
-		category := record[3]
-		price, _ := strconv.Atoi(record[4])
+		productID, err := strconv.Atoi(strings.TrimSpace(record[0]))
+		if err != nil {
+			log.Printf("Fail to rework product_id '%s': %v\n", record[0], err)
+			continue
+		}
+
+		createdAt := strings.TrimSpace(record[4])
+		name := strings.TrimSpace(record[1])
+		category := strings.TrimSpace(record[2])
+
+		price, err := strconv.ParseFloat(strings.TrimSpace(record[3]), 64)
+		if err != nil {
+			log.Printf("Fail to reworkы '%s': %v\n", record[3], err)
+			continue
+		}
+
+		log.Printf("String: ID=%d, Name=%s, Category=%s, Price=%.2f, Date=%s\n",
+			productID, name, category, price, createdAt)
 
 		categories[category] = true
 		*totalItems++
 		*totalPrice += price
 
-		db.Exec("INSERT INTO prices (product_id, created_at, name, category, price) VALUES ($1, $2, $3, $4, $5)",
+		_, err = db.Exec("INSERT INTO prices (product_id, created_at, name, category, price) VALUES ($1, $2, $3, $4, $5)",
 			productID, createdAt, name, category, price)
+		if err != nil {
+			log.Printf("Ошибка записи в базу данных для ID %d: %v\n", productID, err)
+			continue
+		}
 	}
+
+	log.Printf("CSV ready. %s. Result: totalItems=%d, totalPrice=%.2f, totalCategories=%d\n",
+		f.Name, *totalItems, *totalPrice, len(categories))
 }
 
 func handleGet(w http.ResponseWriter, r *http.Request) {
