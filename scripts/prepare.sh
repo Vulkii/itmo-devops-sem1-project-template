@@ -15,9 +15,9 @@ sleep 10
 
 echo "Creating DB and user"
 sudo -u postgres psql <<EOF
-CREATE DATABASE project-sem-1;
+CREATE DATABASE "project-sem-1";
 CREATE USER validator WITH ENCRYPTED PASSWORD 'val1dat0r';
-GRANT ALL PRIVILEGES ON DATABASE project-sem-1 TO validator;
+GRANT ALL PRIVILEGES ON DATABASE "project-sem-1" TO validator;
 EOF
 
 echo "Creating the table"
