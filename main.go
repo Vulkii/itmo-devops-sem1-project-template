@@ -164,7 +164,7 @@ func processCSV(f *zip.File, totalItems *int, totalPrice *float64, categories ma
 
 		price, err := strconv.ParseFloat(strings.TrimSpace(record[3]), 64)
 		if err != nil {
-			log.Printf("Fail to reworkы '%s': %v\n", record[3], err)
+			log.Printf("Fail to rework '%s': %v\n", record[3], err)
 			continue
 		}
 
@@ -178,7 +178,7 @@ func processCSV(f *zip.File, totalItems *int, totalPrice *float64, categories ma
 		_, err = db.Exec("INSERT INTO prices (product_id, created_at, name, category, price) VALUES ($1, $2, $3, $4, $5)",
 			productID, createdAt, name, category, price)
 		if err != nil {
-			log.Printf("Ошибка записи в базу данных для ID %d: %v\n", productID, err)
+			log.Printf("Error ti insert in DB ID %d: %v\n", productID, err)
 			continue
 		}
 	}
