@@ -2,7 +2,15 @@
 
 set -e
 
-echo "Waiting for PostgreSQL to be ready..."
+PGHOST="localhost"
+PGPORT=5432
+PGUSER="validator"
+PGPASSWORD="val1dat0r"
+DBNAME="project-sem-1"
+
+export PGHOST PGPORT PGUSER PGPASSWORD DBNAME
+
+echo "Waiting for PostgreSQL to be ready"
 for i in {1..10}; do
     if psql -U validator -h localhost -p 5432 -d project-sem-1 -c "\\q" &> /dev/null; then
         echo "PostgreSQL is ready!"
@@ -12,17 +20,18 @@ for i in {1..10}; do
     sleep 2
 done
 
-if ! psql -U validator -h localhost -p 5432 -d project-sem-1 -c "\\q" &> /dev/null; then
+if ! psql -U "$PGUSER" -h "$PGHOST" -p "$PGPORT" -d "$DBNAME" -c "\\q" &> /dev/null; then
     echo "Database project-sem-1 is not accessible."
 
     echo "Trying to connect as postgres"
-    if ! psql -U postgres -h localhost -p 5432 -c "\\q" &> /dev/null; then
+    PGUSER="postgres"
+    if ! psql -U "$PGUSER" -h "$PGHOST" -p "$PGPORT" -c "\\q" &> /dev/null; then
         echo "Error: Could not connect to PostgreSQL as postgres."
         exit 1
     fi
 
     echo "Creating user and db"
-    psql -U postgres -h localhost -p 5432 <<EOF
+    psql -U "$PGUSER" -h "$PGHOST" -p "$PGPORT" <<-EOSQL
     DO \$\$ BEGIN
       IF NOT EXISTS (SELECT FROM pg_catalog.pg_user WHERE usename = 'validator') THEN
         CREATE USER validator WITH PASSWORD 'val1dat0r';
@@ -42,15 +51,16 @@ else
 fi
 
 echo "Creating the table prices"
-psql -U validator -h localhost -p 5432 -d project-sem-1 <<EOF
-CREATE TABLE IF NOT EXISTS prices (
-    product_id SERIAL PRIMARY KEY,
-    id INT NOT NULL,
+PGUSER="validator"
+psql -U "$PGUSER" -h "$PGHOST" -p "$PGPORT" -d "$DBNAME" <<-EOSQL
+  CREATE TABLE IF NOT EXISTS prices (
+    id SERIAL PRIMARY KEY,
+    product_id INT NOT NULL,
+    created_at DATE NOT NULL,
     name TEXT NOT NULL,
     category TEXT NOT NULL,
-    price NUMERIC(10, 2) NOT NULL,
-    created_at DATE NOT NULL
-);
-EOF
+    price NUMERIC(10, 2) NOT NULL
+  );
+EOSQL
 
 echo "Everything setted up"
