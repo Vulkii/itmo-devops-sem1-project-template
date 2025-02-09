@@ -25,6 +25,12 @@ const (
 	dbPort     = "5432"
 )
 
+type ResponseonPost struct {
+	TotalItems      int     `json:"total_items"`
+	TotalCategories int     `json:"total_categories"`
+	TotalPrice      float64 `json:"total_price"`
+}
+
 var db *sql.DB
 
 func main() {
@@ -104,20 +110,16 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	response := map[string]interface{}{
-		"total_items":      totalItems,
-		"total_categories": len(categories),
-		"total_price":      totalPrice,
+	response := ResponseonPost{
+		TotalItems:      totalItems,
+		TotalCategories: len(categories),
+		TotalPrice:      totalPrice,
 	}
-	log.Printf("Result query: %+v\n", response)
 	w.Header().Set("Content-Type", "application/json")
-	responseBytes, err := json.Marshal(response)
-	if err != nil {
-		log.Printf("JSON error: %v\n", err)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("JSON error: %v", err)
 		http.Error(w, "Server error", http.StatusInternalServerError)
-		return
 	}
-	fmt.Fprint(w, string(responseBytes))
 
 }
 
