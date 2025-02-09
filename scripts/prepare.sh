@@ -45,7 +45,7 @@ if ! psql -U "$PGUSER" -h "$PGHOST" -p "$PGPORT" -d "$DBNAME" -c "\\q" &> /dev/n
     END \$\$;
 
     GRANT ALL PRIVILEGES ON DATABASE "project-sem-1" TO validator;
-EOF
+EOSQL
 else
     echo "Database project-sem-1 is accessible. No changes required."
 fi
