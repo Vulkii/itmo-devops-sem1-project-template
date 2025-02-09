@@ -9,7 +9,7 @@ echo "Server started with PID: $SERVER_PID"
 
 echo "Waiting for the server to start"
 MAX_RETRIES=10
-RETRY_DELAY=2
+RETRY_DELAY=5
 RETRIES=0
 
 while ! nc -z localhost 8080; do
