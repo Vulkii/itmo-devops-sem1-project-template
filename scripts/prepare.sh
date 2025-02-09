@@ -10,6 +10,9 @@ echo "Starting PostgreSQL"
 sudo systemctl start postgresql
 sudo systemctl enable postgresql
 
+echo "Waiting PostgreSQL to start"
+sleep 5
+
 echo "Creating DB and user"
 sudo -u postgres psql <<EOF
 CREATE DATABASE project-sem-1;
