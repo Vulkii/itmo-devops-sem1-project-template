@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"database/sql"
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -13,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -54,47 +54,101 @@ func handleRequests(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlePost(w http.ResponseWriter, r *http.Request) {
-	file, header, err := r.FormFile("file")
+	file, _, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, "Fail to load the file", http.StatusBadRequest)
+		log.Printf("Ошибка загрузки файла: %v", err)
+		http.Error(w, "Не удалось загрузить файл", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 
-	tempDir := "./temp"
-	os.MkdirAll(tempDir, os.ModePerm)
-
-	zipPath := filepath.Join(tempDir, header.Filename)
-	outFile, err := os.Create(zipPath)
+	tempFile, err := os.CreateTemp("", "uploaded-*.zip")
 	if err != nil {
-		http.Error(w, "Fail to create outFile", http.StatusInternalServerError)
+		log.Printf("Ошибка сохранения файла: %v", err)
+		http.Error(w, "Ошибка сохранения файла", http.StatusInternalServerError)
 		return
 	}
-	defer outFile.Close()
-	io.Copy(outFile, file)
+	defer os.Remove(tempFile.Name())
 
-	zipReader, err := zip.OpenReader(zipPath)
+	if _, err := io.Copy(tempFile, file); err != nil {
+		log.Printf("Ошибка копирования файла: %v", err)
+		http.Error(w, "Ошибка копирования файла", http.StatusInternalServerError)
+		return
+	}
+
+	zipReader, err := zip.OpenReader(tempFile.Name())
 	if err != nil {
-		http.Error(w, "Fail to read the archive", http.StatusInternalServerError)
+		log.Printf("Ошибка открытия архива: %v", err)
+		http.Error(w, "Ошибка чтения архива", http.StatusBadRequest)
 		return
 	}
 	defer zipReader.Close()
 
-	var totalItems, totalPrice int
-	categories := make(map[string]bool)
-
+	var csvRecords [][]string
 	for _, f := range zipReader.File {
 		if strings.HasSuffix(f.Name, ".csv") {
-			processCSV(f, &totalItems, &totalPrice, categories)
+			csvFile, err := f.Open()
+			if err != nil {
+				log.Printf("Ошибка открытия CSV: %v", err)
+				continue
+			}
+			defer csvFile.Close()
+
+			reader := csv.NewReader(csvFile)
+			records, err := reader.ReadAll()
+			if err != nil {
+				log.Printf("Ошибка чтения CSV: %v", err)
+				continue
+			}
+			csvRecords = append(csvRecords, records...)
 		}
 	}
 
-	response := map[string]interface{}{
-		"total_items":      totalItems,
-		"total_categories": len(categories),
-		"total_price":      totalPrice,
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("Ошибка начала транзакции: %v", err)
+		http.Error(w, "Ошибка начала транзакции", http.StatusInternalServerError)
+		return
 	}
-	json.NewEncoder(w).Encode(response)
+	defer tx.Rollback()
+
+	for _, record := range csvRecords {
+		if len(record) < 5 {
+			continue
+		}
+
+		productID, err := strconv.Atoi(record[0])
+		if err != nil {
+			log.Printf("Ошибка преобразования product_id: %v", err)
+			continue
+		}
+		createdAt := record[1]
+		name := record[2]
+		category := record[3]
+		price, err := strconv.ParseFloat(record[4], 64)
+		if err != nil {
+			log.Printf("Ошибка преобразования цены: %v", err)
+			continue
+		}
+
+		if _, err := time.Parse("2006-01-02", createdAt); err != nil {
+			log.Printf("Некорректный формат даты '%s': %v", createdAt, err)
+			continue
+		}
+
+		_, err = tx.Exec(`INSERT INTO prices (product_id, created_at, name, category, price) VALUES ($1, $2, $3, $4, $5)`,
+			productID, createdAt, name, category, price)
+		if err != nil {
+			log.Printf("Ошибка вставки в БД: %v", err)
+			continue
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("Ошибка подтверждения транзакции: %v", err)
+		http.Error(w, "Ошибка подтверждения транзакции", http.StatusInternalServerError)
+		return
+	}
 }
 
 func processCSV(f *zip.File, totalItems *int, totalPrice *int, categories map[string]bool) {
