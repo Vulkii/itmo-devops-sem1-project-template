@@ -39,7 +39,8 @@ bash ./scripts/prepare.sh
 bash ./scripts/run.sh
 ```
 6. Запустить тесты
-```bash ./scripts/tests.sh
+```
+bash ./scripts/tests.sh
 ```
 ## Тестирование
 
@@ -47,10 +48,12 @@ bash ./scripts/run.sh
 
 
 Отправить POST-запрос на запись в БД
-```curl -X POST -F "file=@sample_data.zip" http://localhost:8080/api/v0/prices
+```
+curl -X POST -F "file=@sample_data.zip" http://localhost:8080/api/v0/prices
 ```
 Отправить GET-запрос на скачивание записей из БД
-```curl -X GET -o response.zip http://localhost:8080/api/v0/prices
+```
+curl -X GET -o response.zip http://localhost:8080/api/v0/prices
 ```
 ## Контакт
 
