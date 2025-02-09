@@ -10,6 +10,12 @@ echo "Starting PostgreSQL"
 sudo systemctl start postgresql
 sudo systemctl enable postgresql
 
+echo "Initializing PostgreSQL database"
+if [ ! -d "/var/lib/postgresql/data" ]; then
+    echo "No database found, initializing..."
+    sudo -u postgres initdb -D /var/lib/postgresql/data
+fi
+
 echo "Checking PostgreSQL status"
 if ! sudo systemctl is-active --quiet postgresql; then
     echo "Error: PostgreSQL is not running. Checking logs..."
