@@ -6,6 +6,10 @@ echo "Installing postgresql and unzip"
 sudo apt update
 sudo apt install -y postgresql postgresql-client unzip
 
+echo "Starting PostgreSQL"
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
 echo "Creating DB and user"
 sudo -u postgres psql <<EOF
 CREATE DATABASE project-sem-1;
