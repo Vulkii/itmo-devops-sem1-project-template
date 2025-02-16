@@ -101,6 +101,7 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 
 	var totalItems int
 	var totalPrice float64
+	var totalCategories int
 	categories := make(map[string]bool)
 
 	for _, f := range zipReader.File {
