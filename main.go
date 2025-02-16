@@ -107,7 +107,7 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 	for _, f := range zipReader.File {
 		if strings.HasSuffix(f.Name, ".csv") {
 			log.Printf("CSV detected: %s\n", f.Name)
-			processCSV(f, &totalItems, &totalPrice, categories)
+			processCSV(f, &totalItems, &totalPrice, &totalCategories)
 		}
 	}
 
@@ -124,7 +124,7 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func processCSV(f *zip.File, totalItems *int, totalPrice *float64, categories map[string]bool) {
+func processCSV(f *zip.File, totalItems *int, totalPrice *float64, totalCategories *int) {
 	log.Printf("Starting CSV: %s\n", f.Name)
 
 	rc, err := f.Open()
