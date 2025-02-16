@@ -124,6 +124,14 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 
 }
 
+type DataRow struct {
+	ProductID int
+	CreatedAt string
+	Name      string
+	Category  string
+	Price     float64
+}
+
 func processCSV(f *zip.File, totalItems *int, totalPrice *float64, totalCategories *int) {
 	log.Printf("Starting CSV: %s\n", f.Name)
 
@@ -138,10 +146,55 @@ func processCSV(f *zip.File, totalItems *int, totalPrice *float64, totalCategori
 
 	header, err := reader.Read()
 	if err != nil {
-		log.Printf("Fail to read CSV: %v\n", err)
+		log.Printf("Fail to read CSV header: %v\n", err)
 		return
 	}
-	log.Printf("Heading CSV: %v\n", header)
+	log.Printf("CSV Header: %v\n", header)
+
+	var rows []DataRow
+	categorySet := make(map[string]bool)
+
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Printf("Fail to read row in CSV: %v\n", err)
+			return
+		}
+
+		productID, err := strconv.Atoi(strings.TrimSpace(record[0]))
+		if err != nil {
+			log.Printf("Invalid product_id '%s': %v\n", record[0], err)
+			return
+		}
+
+		createdAt := strings.TrimSpace(record[4])
+		name := strings.TrimSpace(record[1])
+		category := strings.TrimSpace(record[2])
+
+		price, err := strconv.ParseFloat(strings.TrimSpace(record[3]), 64)
+		if err != nil {
+			log.Printf("Invalid price '%s': %v\n", record[3], err)
+			return
+		}
+
+		rows = append(rows, DataRow{
+			ProductID: productID,
+			CreatedAt: createdAt,
+			Name:      name,
+			Category:  category,
+			Price:     price,
+		})
+
+		categorySet[category] = true
+	}
+
+	if len(rows) == 0 {
+		log.Println("No valid rows found, skipping database insertion.")
+		return
+	}
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -163,36 +216,11 @@ func processCSV(f *zip.File, totalItems *int, totalPrice *float64, totalCategori
 	}
 	defer stmt.Close()
 
-	for {
-		record, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
+	for _, row := range rows {
+		_, err = stmt.Exec(row.ProductID, row.CreatedAt, row.Name, row.Category, row.Price)
 		if err != nil {
-			log.Printf("Fail to read string in CSV: %v\n", err)
-			continue
-		}
-
-		productID, err := strconv.Atoi(strings.TrimSpace(record[0]))
-		if err != nil {
-			log.Printf("Fail to rework product_id '%s': %v\n", record[0], err)
-			continue
-		}
-
-		createdAt := strings.TrimSpace(record[4])
-		name := strings.TrimSpace(record[1])
-		category := strings.TrimSpace(record[2])
-
-		price, err := strconv.ParseFloat(strings.TrimSpace(record[3]), 64)
-		if err != nil {
-			log.Printf("Fail to rework '%s': %v\n", record[3], err)
-			continue
-		}
-
-		_, err = stmt.Exec(productID, createdAt, name, category, price)
-		if err != nil {
-			log.Printf("Error inserting into DB ID %d: %v\n", productID, err)
-			continue
+			log.Printf("Error inserting into DB ID %d: %v\n", row.ProductID, err)
+			return
 		}
 	}
 
