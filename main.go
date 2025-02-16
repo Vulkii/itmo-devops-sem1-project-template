@@ -142,6 +142,26 @@ func processCSV(f *zip.File, totalItems *int, totalPrice *float64, categories ma
 	}
 	log.Printf("Heading CSV: %v\n", header)
 
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("Fail to begin transaction: %v\n", err)
+		return
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	stmt, err := tx.Prepare("INSERT INTO prices (id, created_at, name, category, price) VALUES ($1, $2, $3, $4, $5)")
+	if err != nil {
+		log.Printf("Fail to prepare statement: %v\n", err)
+		return
+	}
+	defer stmt.Close()
+
 	for {
 		record, err := reader.Read()
 		if err == io.EOF {
@@ -168,27 +188,21 @@ func processCSV(f *zip.File, totalItems *int, totalPrice *float64, categories ma
 			continue
 		}
 
-		log.Printf("String: ID=%d, Name=%s, Category=%s, Price=%.2f, Date=%s\n",
-			productID, name, category, price, createdAt)
-
-		categories[category] = true
-		*totalItems++
-		*totalPrice += price
-
-		_, err = db.Exec("INSERT INTO prices (product_id, created_at, name, category, price) VALUES ($1, $2, $3, $4, $5)",
-			productID, createdAt, name, category, price)
+		_, err = stmt.Exec(productID, createdAt, name, category, price)
 		if err != nil {
-			log.Printf("Error ti insert in DB ID %d: %v\n", productID, err)
+			log.Printf("Error inserting into DB ID %d: %v\n", productID, err)
 			continue
 		}
 	}
 
-	log.Printf("CSV ready. %s. Result: totalItems=%d, totalPrice=%.2f, totalCategories=%d\n",
-		f.Name, *totalItems, *totalPrice, len(categories))
+	*totalItems, *totalCategories, *totalPrice, err = calculateStatistics(tx)
+	if err != nil {
+		log.Printf("Fail to calculate statistics: %v\n", err)
+	}
 }
 
 func handleGet(w http.ResponseWriter, r *http.Request) {
-	rows, _ := db.Query("SELECT product_id, created_at, name, category, price FROM prices")
+	rows, _ := db.Query("SELECT id, created_at, name, category, price FROM prices")
 	defer rows.Close()
 
 	tempDir := "./temp"
@@ -204,9 +218,20 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 		var id int
 		var createdAt, name, category string
 		var price int
-		rows.Scan(&id, &createdAt, &name, &category, &price)
+		if err := rows.Scan(&id, &createdAt, &name, &category, &price); err != nil {
+			log.Printf("Failed to scan row: %v\n", err)
+			http.Error(w, "Error scanning data", http.StatusInternalServerError)
+			return
+		}
 		writer.Write([]string{strconv.Itoa(id), createdAt, name, category, strconv.Itoa(price)})
 	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("Error iterating over rows: %v\n", err)
+		http.Error(w, "Error retrieving data", http.StatusInternalServerError)
+		return
+	}
+
 	writer.Flush()
 
 	zipFilePath := filepath.Join(tempDir, "data.zip")
@@ -222,4 +247,20 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "attachment; filename=data.zip")
 	w.Header().Set("Content-Type", "application/zip")
 	http.ServeFile(w, r, zipFilePath)
+}
+
+func calculateStatistics(tx *sql.Tx) (int, int, float64, error) {
+	var totalItems int
+	var totalCategories int
+	var totalPrice float64
+
+	query := `
+		SELECT COUNT(*), COUNT(DISTINCT category), COALESCE(SUM(price), 0)
+		FROM prices
+	`
+	err := tx.QueryRow(query).Scan(&totalItems, &totalCategories, &totalPrice)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	return totalItems, totalCategories, totalPrice, nil
 }
